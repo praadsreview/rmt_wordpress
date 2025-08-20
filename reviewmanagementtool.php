@@ -1,194 +1,266 @@
 <?php
-/*
-Plugin Name: Review Management Tool Widget Embedder
-Plugin URI: https://blog.reviewmanagementtool.com/2025/07/how-to-easily-add-testimonials-to-your.html
-Description: Embed testimonial widgets from ReviewManagementTool.com using a shortcode and Gutenberg block.
-Version: 1.1.2
-Author: Review Management Tool Admin
-Author URI: https://reviewmanagementtool.com/aboutUs
-License: GPLv2 or later
-License URI: https://www.gnu.org/licenses/gpl-2.0.html
-Text Domain: review-management-tool-widget-embedder
-*/
+/**
+ * Plugin Name: Review Management Tool
+ * Plugin URI:  https://reviewmanagementtool.com
+ * Description: Collect, manage, and showcase testimonials on your WordPress site with a shortcode and settings screen.
+ * Version:     1.1.2
+ * Author:      Review Management Tool Team
+ * Author URI:  https://reviewmanagementtool.com
+ * Text Domain: reviewmanagementtool
+ * License:     GPLv2 or later
+ * License URI: https://www.gnu.org/licenses/gpl-2.0.html
+ */
 
-if ( ! defined( 'ABSPATH' ) ) { exit; }
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
-/** Load textdomain */
-add_action( 'init', function () {
-	load_plugin_textdomain(
-		'review-management-tool-widget-embedder',
-		false,
-		dirname( plugin_basename( __FILE__ ) ) . '/languages'
-	);
+/**
+ * -----------------------------------------------------------------------------
+ * Constants
+ * -----------------------------------------------------------------------------
+ */
+define( 'RMT_FILE', __FILE__ );
+define( 'RMT_BASENAME', plugin_basename( __FILE__ ) );
+define( 'RMT_DIR', plugin_dir_path( __FILE__ ) );
+define( 'RMT_URL', plugins_url( '/', __FILE__ ) );
+define( 'RMT_VERSION', '1.1.2' );
+
+/**
+ * Default options (used as fallbacks; no settings UI shown)
+ */
+function rmt_default_options() {
+    return array(
+        'default_widget_id' => '',
+        // Example CDN base: https://cdn.reviewmanagementtool.com/widget-static
+        'cdn_base_url'      => 'https://cdn.reviewmanagementtool.com/widget-static',
+    );
+}
+
+/**
+ * (Optional) On activation, ensure an options row exists with sensible defaults.
+ * Keeping this is harmless even without a settings form.
+ */
+register_activation_hook( __FILE__, function () {
+    $defaults = rmt_default_options();
+    $existing = get_option( 'reviewmanagementtool_options' );
+    if ( ! is_array( $existing ) ) {
+        update_option( 'reviewmanagementtool_options', $defaults );
+    } else {
+        update_option( 'reviewmanagementtool_options', wp_parse_args( $existing, $defaults ) );
+    }
 } );
 
 /**
- * Register Gutenberg block (script only if /build exists).
- * NOTE: The block name stays 'rmt/embed' to match the compiled build/index.js.
- * If you later rebuild the block under a new name, update both JS and PHP.
+ * -----------------------------------------------------------------------------
+ * Instructions block (replaces previous field)
+ * -----------------------------------------------------------------------------
  */
-function revimato_register_block() {
-	$block_js = plugin_dir_path( __FILE__ ) . 'build/index.js';
-	$deps     = array( 'wp-blocks', 'wp-element', 'wp-block-editor', 'wp-components' );
+function rmt_instructions_block() {
+    ?>
+    <div class="rmt-instructions" style="margin-top:12px;padding:12px;border:1px solid #ccd0d4;border-radius:6px;background:#fff;">
+        <h2 style="margin:0 0 10px;"><?php echo esc_html__( 'How to embed testimonials from ReviewManagementTool.com', 'reviewmanagementtool' ); ?></h2>
+        <ol style="margin:0 0 12px 18px;">
+            <li><?php
+                printf(
+                    /* translators: %s is the platform URL */
+                    esc_html__( 'Sign up or log in at %s.', 'reviewmanagementtool' ),
+                    '<a href="' . esc_url( 'https://reviewmanagementtool.com' ) . '" target="_blank" rel="noopener noreferrer">reviewmanagementtool.com</a>'
+                );
+            ?></li>
+            <li><?php echo esc_html__( 'Add your testimonials into the platform. You can organize them with tags (e.g., "SaaS Clients", "Web Design Projects") to create different collections.', 'reviewmanagementtool' ); ?></li>
+            <li><?php echo esc_html__( 'Navigate to the Widgets section in your dashboard.', 'reviewmanagementtool' ); ?></li>
+            <li><?php echo esc_html__( 'Create a new widget. Customize its appearance and choose which testimonials (or tags) to include.', 'reviewmanagementtool' ); ?></li>
+            <li><?php echo esc_html__( 'Copy the unique Widget ID.', 'reviewmanagementtool' ); ?></li>
+        </ol>
 
-	if ( file_exists( $block_js ) ) {
-		wp_register_script(
-			'revimato-block',
-			plugins_url( 'build/index.js', __FILE__ ),
-			$deps,
-			filemtime( $block_js ),
-			true
-		);
+        <h3 style="margin:8px 0 6px;"><?php echo esc_html__( 'Use this shortcode in WordPress (current plugin):', 'reviewmanagementtool' ); ?></h3>
+        <pre style="margin:0 0 10px;white-space:pre-wrap;"><code>[rmt_widget id="YOUR_ID"]</code></pre>
 
-		register_block_type( 'rmt/embed', array(
-			'editor_script'   => 'revimato-block',
-			'render_callback' => 'revimato_render_block',
-			'attributes'      => array(
-				'widgetId' => array( 'type' => 'string', 'default' => '' ),
-				'type'     => array( 'type' => 'string', 'default' => 'iframe' ), // iframe | js | static
-			),
-		) );
-	}
+        <h3 style="margin:8px 0 6px;"><?php echo esc_html__( 'Alternate shortcode forms (if available in your install):', 'reviewmanagementtool' ); ?></h3>
+        <pre style="margin:0 0 6px;white-space:pre-wrap;"><code>[rmtool widget_id="YOUR_ID" type="static"]  ; <?php echo esc_html__( 'lightweight & fast (static JS via CDN)', 'reviewmanagementtool' ); ?></code></pre>
+        <pre style="margin:0 0 6px;white-space:pre-wrap;"><code>[rmtool widget_id="YOUR_ID" type="iframe"]  ; <?php echo esc_html__( 'iframe-based embed', 'reviewmanagementtool' ); ?></code></pre>
+        <pre style="margin:0;white-space:pre-wrap;"><code>[rmtool widget_id="YOUR_ID" type="js"]      ; <?php echo esc_html__( 'dynamic JS loader', 'reviewmanagementtool' ); ?></code></pre>
+
+        <p class="description" style="margin-top:10px;">
+            <?php echo esc_html__( 'Note: This plugin’s built-in shortcode is [rmt_widget]. The [rmtool] variants are shown for compatibility with setups that provide them.', 'reviewmanagementtool' ); ?>
+        </p>
+    </div>
+    <?php
 }
-add_action( 'init', 'revimato_register_block' );
 
 /**
- * Core renderer used by both shortcode and block.
- * Supports:
- *   type="iframe" (default)
- *   type="js"     (shared dynamic loader)
- *   type="static" (widget-specific CDN JS)
+ * -----------------------------------------------------------------------------
+ * Admin: menu + page (instructions only; no form, no save)
+ * -----------------------------------------------------------------------------
  */
-function revimato_render_embed( $atts ) {
-	$atts = shortcode_atts( array(
-		'widget_id' => '',
-		'type'      => 'iframe',
-	), $atts, 'rmtool' );
-
-	$id   = sanitize_text_field( $atts['widget_id'] );
-	$type = in_array( $atts['type'], array( 'iframe', 'js', 'static' ), true ) ? $atts['type'] : 'iframe';
-
-	// Optional UUID check to keep IDs tidy.
-	if ( ! empty( $id ) && ! preg_match( '/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $id ) ) {
-		return '<!-- Review Management Tool: invalid widget_id format -->';
-	}
-
-	// Avoid any external calls unless a widget is actually placed.
-	if ( empty( $id ) ) {
-		if ( is_admin() ) {
-			return '<div class="notice notice-info"><p>' .
-				esc_html__( 'Review Management Tool: Please set a Widget ID to render the embed.', 'review-management-tool-widget-embedder' ) .
-			'</p></div>';
-		}
-		if ( is_user_logged_in() && current_user_can( 'edit_posts' ) ) {
-			return '<!-- Review Management Tool: Add widget_id to shortcode/block to render. -->';
-		}
-		return '';
-	}
-
-	// Static JS: widget-specific file served from CDN
-	if ( 'static' === $type ) {
-		$handle = 'revimato-static-' . $id;
-		$src    = 'https://cdn.reviewmanagementtool.com/widget-static/testimonial-widget-' . rawurlencode( $id ) . '.js';
-
-		if ( ! wp_script_is( $handle, 'enqueued' ) ) {
-			wp_enqueue_script( $handle, $src, array(), null, true );
-			if ( function_exists( 'wp_script_add_data' ) ) {
-				wp_script_add_data( $handle, 'defer', true );
-			}
-		}
-		return '<div data-rmt-testimonial-widget="widget-' . esc_attr( $id ) . '"></div>';
-	}
-
-	// Dynamic JS: shared loader
-	if ( 'js' === $type ) {
-		if ( ! wp_script_is( 'revimato-embed', 'enqueued' ) ) {
-			wp_enqueue_script(
-				'revimato-embed',
-				'https://reviewmanagementtool.com/widgets/embed.js',
-				array(),
-				'1.0.0',
-				true
-			);
-			if ( function_exists( 'wp_script_add_data' ) ) {
-				wp_script_add_data( 'revimato-embed', 'defer', true );
-			}
-		}
-		return '<div class="rmt-widget" data-id="' . esc_attr( $id ) . '"></div>';
-	}
-
-	// Default: iframe (safest)
-	$src = 'https://reviewmanagementtool.com/embed/widget/' . rawurlencode( $id );
-	return '<iframe src="' . esc_url( $src ) . '" width="100%" height="400" frameborder="0" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>';
-}
-
-/** Shortcode: [rmtool widget_id="..." type="iframe|js|static"] */
-function revimato_register_shortcode( $atts ) {
-	return revimato_render_embed( $atts );
-}
-add_shortcode( 'rmtool', 'revimato_register_shortcode' );
-
-/** Block render proxy */
-function revimato_render_block( $attributes ) {
-	return revimato_render_embed( array(
-		'widget_id' => isset( $attributes['widgetId'] ) ? $attributes['widgetId'] : '',
-		'type'      => isset( $attributes['type'] ) ? $attributes['type'] : 'iframe',
-	) );
-}
-
-/** Admin Help Page */
 add_action( 'admin_menu', function () {
-	add_options_page(
-		__( 'Review Management Tool', 'review-management-tool-widget-embedder' ),
-		__( 'Review Management Tool', 'review-management-tool-widget-embedder' ),
-		'manage_options',
-		'review-management-tool',
-		'revimato_settings_page'
-	);
+    add_menu_page(
+        esc_html__( 'Review Management Tool', 'reviewmanagementtool' ),
+        esc_html__( 'Review Tool', 'reviewmanagementtool' ),
+        'manage_options',
+        'reviewmanagementtool',
+        'rmt_render_settings_page',
+        'dashicons-testimonial',
+        56
+    );
 } );
 
-function revimato_settings_page() {
-	?>
-	<div class="wrap">
-		<h1><?php echo esc_html__( 'Review Management Tool – Quick Start Guide', 'review-management-tool-widget-embedder' ); ?></h1>
-
-		<h2><?php echo esc_html__( 'How to Use This Plugin (1-Minute Setup)', 'review-management-tool-widget-embedder' ); ?></h2>
-		<ol style="margin-left:20px;list-style:decimal;">
-			<li><a href="https://reviewmanagementtool.com" target="_blank" rel="noopener noreferrer">ReviewManagementTool.com</a></li>
-			<li><?php echo esc_html__( 'Create your testimonials (text / video / audio) and build a widget', 'review-management-tool-widget-embedder' ); ?></li>
-			<li><?php echo esc_html__( 'Copy the Widget ID from your dashboard', 'review-management-tool-widget-embedder' ); ?></li>
-			<li><?php echo esc_html__( 'Return to WordPress and choose ONE embed method:', 'review-management-tool-widget-embedder' ); ?>
-				<ul style="list-style:disc;margin-left:20px;">
-					<li><code>[rmtool widget_id="YOUR_ID" type="iframe"]</code> – <?php echo esc_html__( 'Safest, works everywhere (default)', 'review-management-tool-widget-embedder' ); ?></li>
-					<li><code>[rmtool widget_id="YOUR_ID" type="static"]</code> – <?php echo esc_html__( 'Fast, static JS file per widget (CDN)', 'review-management-tool-widget-embedder' ); ?></li>
-					<li><code>[rmtool widget_id="YOUR_ID" type="js"]</code> – <?php echo esc_html__( 'Dynamic loader script (one shared JS)', 'review-management-tool-widget-embedder' ); ?></li>
-				</ul>
-			</li>
-			<li><?php echo esc_html__( 'Or insert the “Review Management Widget” Gutenberg block and set Widget ID + Method in the sidebar', 'review-management-tool-widget-embedder' ); ?></li>
-		</ol>
-
-		<hr/>
-
-		<p>
-			<strong><?php echo esc_html__( 'Privacy note:', 'review-management-tool-widget-embedder' ); ?></strong>
-			<?php echo esc_html__( 'This plugin only requests assets from reviewmanagementtool.com and cdn.reviewmanagementtool.com when you embed a widget on a page. No requests are made on new installs until you place a widget.', 'review-management-tool-widget-embedder' ); ?>
-			<br />
-			<a href="https://reviewmanagementtool.com/privacy-policy" target="_blank" rel="noopener noreferrer"><?php echo esc_html__( 'Privacy Policy', 'review-management-tool-widget-embedder' ); ?></a>
-			|
-			<a href="https://reviewmanagementtool.com/terms-and-conditions" target="_blank" rel="noopener noreferrer"><?php echo esc_html__( 'Terms & Conditions', 'review-management-tool-widget-embedder' ); ?></a>
-		</p>
-
-		<p>
-			<strong><?php echo esc_html__( 'Need more help?', 'review-management-tool-widget-embedder' ); ?></strong>
-			<a href="https://blog.reviewmanagementtool.com/2025/07/how-to-easily-add-testimonials-to-your.html" target="_blank" rel="noopener noreferrer">
-				<?php echo esc_html__( 'Read the full tutorial with screenshots', 'review-management-tool-widget-embedder' ); ?>
-			</a>
-		</p>
-
-		<p>
-			<strong><?php echo esc_html__( 'Support:', 'review-management-tool-widget-embedder' ); ?></strong>
-			<a href="mailto:hello@reviewmanagementtool.com">hello@reviewmanagementtool.com</a>
-		</p>
-	</div>
-	<?php
+function rmt_render_settings_page() {
+    if ( ! current_user_can( 'manage_options' ) ) {
+        return;
+    }
+    ?>
+    <div class="wrap">
+        <h1><?php echo esc_html__( 'Review Management Tool – Instructions', 'reviewmanagementtool' ); ?></h1>
+        <p class="description"><?php echo esc_html__( 'Follow these steps to generate a widget and embed it on your WordPress site.', 'reviewmanagementtool' ); ?></p>
+        <hr />
+        <?php rmt_instructions_block(); ?>
+    </div>
+    <?php
 }
+
+/**
+ * Add "Settings" link on the Plugins list page.
+ */
+add_filter( 'plugin_action_links_' . RMT_BASENAME, function ( $links ) {
+    $url      = admin_url( 'admin.php?page=reviewmanagementtool' );
+    $settings = '<a href="' . esc_url( $url ) . '">' . esc_html__( 'Settings', 'reviewmanagementtool' ) . '</a>';
+    array_unshift( $links, $settings );
+    return $links;
+} );
+
+/**
+ * -----------------------------------------------------------------------------
+ * Admin assets (optional): load build/index.js + style-index.css on our page
+ * -----------------------------------------------------------------------------
+ */
+add_action( 'admin_enqueue_scripts', function ( $hook ) {
+    if ( 'toplevel_page_reviewmanagementtool' !== $hook ) {
+        return;
+    }
+
+    // Enqueue style if present
+    $style_path = RMT_DIR . 'build/style-index.css';
+    if ( file_exists( $style_path ) ) {
+        wp_enqueue_style(
+            'reviewmanagementtool-admin',
+            RMT_URL . 'build/style-index.css',
+            array(),
+            filemtime( $style_path )
+        );
+    }
+
+    // Enqueue script if present with proper deps from index.asset.php
+    $asset_file_path = RMT_DIR . 'build/index.asset.php';
+    $script_path     = RMT_DIR . 'build/index.js';
+
+    if ( file_exists( $script_path ) ) {
+        $deps  = array();
+        $ver   = filemtime( $script_path );
+
+        if ( file_exists( $asset_file_path ) ) {
+            $asset = include $asset_file_path;
+            if ( is_array( $asset ) ) {
+                $deps = isset( $asset['dependencies'] ) ? (array) $asset['dependencies'] : array();
+                $ver  = isset( $asset['version'] ) ? $asset['version'] : $ver;
+            }
+        }
+
+        wp_enqueue_script(
+            'reviewmanagementtool-admin',
+            RMT_URL . 'build/index.js',
+            $deps,
+            $ver,
+            true
+        );
+
+        // JS translations (if your JS uses @wordpress/i18n) — guard for folder existence
+        if ( is_dir( RMT_DIR . 'languages' ) ) {
+            wp_set_script_translations(
+                'reviewmanagementtool-admin',
+                'reviewmanagementtool',
+                RMT_DIR . 'languages'
+            );
+        }
+    }
+} );
+
+/**
+ * -----------------------------------------------------------------------------
+ * Frontend: stylesheet (shared)
+ * -----------------------------------------------------------------------------
+ */
+add_action( 'wp_enqueue_scripts', function () {
+    $style_path = RMT_DIR . 'build/style-index.css';
+    if ( file_exists( $style_path ) ) {
+        wp_enqueue_style(
+            'reviewmanagementtool-frontend',
+            RMT_URL . 'build/style-index.css',
+            array(),
+            filemtime( $style_path )
+        );
+    }
+} );
+
+/**
+ * -----------------------------------------------------------------------------
+ * Shortcode: [rmt_widget id="..."]
+ * -----------------------------------------------------------------------------
+ * Renders the container and ENQUEUES the remote CDN script (no inline <script>).
+ */
+add_shortcode( 'rmt_widget', function ( $atts ) {
+    $opts = get_option( 'reviewmanagementtool_options', rmt_default_options() );
+
+    $atts = shortcode_atts(
+        array(
+            'id' => '', // Widget ID (required if no default is set)
+        ),
+        $atts,
+        'rmt_widget'
+    );
+
+    $widget_id = $atts['id'];
+
+    if ( '' === $widget_id ) {
+        // If you ever decide to support a default ID again, you can restore the line below:
+        // $widget_id = isset( $opts['default_widget_id'] ) ? $opts['default_widget_id'] : '';
+    }
+
+    if ( '' === $widget_id ) {
+        return esc_html__( 'No widget ID provided.', 'reviewmanagementtool' );
+    }
+
+    $widget_id = preg_replace( '/[^a-zA-Z0-9\-\_]/', '', $widget_id );
+
+    $cdn_base = isset( $opts['cdn_base_url'] ) ? $opts['cdn_base_url'] : '';
+    if ( '' === $cdn_base ) {
+        $cdn_base = 'https://cdn.reviewmanagementtool.com/widget-static';
+    }
+    $cdn_base = rtrim( $cdn_base, '/' );
+
+    // Example: testimonial-widget-{WIDGET_ID}.js
+    $src    = $cdn_base . '/testimonial-widget-' . rawurlencode( $widget_id ) . '.js';
+    $handle = 'rmt-widget-' . md5( $widget_id . '|' . $src );
+
+    // Register & enqueue the remote widget script (include version for cache-busting).
+    wp_register_script( $handle, esc_url_raw( $src ), array(), RMT_VERSION, true );
+    wp_enqueue_script( $handle );
+
+    // Return only the container. No inline <script> tags (passes Plugin Check).
+    $html  = '<div class="rmt-testimonial-widget" data-rmt-testimonial-widget="widget-' . esc_attr( $widget_id ) . '">';
+    $html .= esc_html__( 'Loading testimonials…', 'reviewmanagementtool' );
+    $html .= '</div>';
+
+    return $html;
+} );
+
+/**
+ * -----------------------------------------------------------------------------
+ * Uninstall cleanup (optional)
+ * -----------------------------------------------------------------------------
+ * To enable, create uninstall.php or use register_uninstall_hook.
+ */
+// register_uninstall_hook( __FILE__, function () {
+//     delete_option( 'reviewmanagementtool_options' );
+// } );
