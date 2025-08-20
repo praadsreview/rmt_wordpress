@@ -1,11 +1,11 @@
 <?php
 /**
  * Plugin Name: Review Management Tool
- * Plugin URI:  https://reviewmanagementtool.com
+ * Plugin URI:  https://blog.reviewmanagementtool.com/2025/07/how-to-easily-add-testimonials-to-your.html
  * Description: Collect, manage, and showcase testimonials on your WordPress site with a shortcode and settings screen.
  * Version:     1.1.2
  * Author:      Review Management Tool Team
- * Author URI:  https://reviewmanagementtool.com
+ * Author URI:  https://reviewmanagementtool.com/aboutUs
  * Text Domain: reviewmanagementtool
  * License:     GPLv2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
